@@ -15,6 +15,30 @@
 #include "proc.h"
 #include "x86.h"
 
+
+extern int mode;
+int cp_mode = 0, cp_data = 0;
+int curr_pos;
+
+#define CP_BUF 256
+struct {
+	char cp_buf[CP_BUF];
+	int len;
+    uint start;
+    uint end;
+} cp_struct;
+
+
+#define INPUT_BUF 128
+struct {
+	char buf[INPUT_BUF];
+	uint r;  // Read index
+	uint w;  // Write index
+	uint e;  // Edit index
+} input;
+
+#define C(x)  ((x)-'@')  // Control-x
+
 static void consputc(int);
 
 static int panicked = 0;
@@ -126,6 +150,25 @@ panic(char *s)
 #define CRTPORT 0x3d4
 static ushort *crt = (ushort*)P2V(0xb8000);  // CGA memory
 
+
+static void refresh(int r_mode) {
+    if (r_mode != 0) {
+        if (cp_struct.start <= cp_struct.end) {
+            for (int i = cp_struct.start; i <= cp_struct.end; i++) 
+                crt[i] = (crt[i] & 0xff) | 0x7000;
+        }
+        else {
+            for (int i = cp_struct.end; i < cp_struct.start; i++) 
+                crt[i] = (crt[i] & 0xff) | 0x7000;
+        }
+    }
+    else {
+        for (int i = 0; i < 2000; i++)
+            crt[i] = (crt[i] & 0xff) | 0x0700;
+    }
+}
+
+
 static void
 cgaputc(int c)
 {
@@ -137,27 +180,119 @@ cgaputc(int c)
 	outb(CRTPORT, 15);
 	pos |= inb(CRTPORT+1);
 
-	if(c == '\n')
-		pos += 80 - pos%80;
-	else if(c == BACKSPACE){
-		if(pos > 0) --pos;
-	} else
-		crt[pos++] = (c&0xff) | 0x0700;  // black on white
+	if (mode == 0) {
+        if (c >= 0) {
+            if(c == '\n')
+                pos += 80 - pos%80;
+            else if(c == BACKSPACE){
+                if(pos > 0) --pos;
+            } else
+                crt[pos++] = (c&0xff) | 0x0700;  // black on white
 
-	if(pos < 0 || pos > 25*80)
-		panic("pos under/overflow");
+            if(pos < 0 || pos > 25*80)
+                panic("pos under/overflow");
 
-	if((pos/80) >= 24){  // Scroll up.
-		memmove(crt, crt+80, sizeof(crt[0])*23*80);
-		pos -= 80;
-		memset(crt+pos, 0, sizeof(crt[0])*(24*80 - pos));
-	}
-
-	outb(CRTPORT, 14);
-	outb(CRTPORT+1, pos>>8);
-	outb(CRTPORT, 15);
-	outb(CRTPORT+1, pos);
-	crt[pos] = ' ' | 0x0700;
+            if((pos/80) >= 24){  // Scroll up.
+                memmove(crt, crt+80, sizeof(crt[0])*23*80);
+                pos -= 80;
+                memset(crt+pos, 0, sizeof(crt[0])*(24*80 - pos));
+            }
+        }
+        else if (c == -1111) {
+            refresh(0);
+            pos = curr_pos;
+        }
+        else if (c == -2222) {
+            if (cp_data != 0) {
+                for (int i = 0; i < cp_struct.len; i++) {
+                    if (pos >= 24 * 80) {
+                        memmove(crt, crt+80, sizeof(crt[0])*23*80);
+                        pos -= 80;
+                        memset(crt+pos, 0, sizeof(crt[0])*(24*80 - pos));
+                    }
+                    input.buf[input.e++ % INPUT_BUF] = cp_struct.cp_buf[i] | 0x0700;
+                    crt[pos++] = cp_struct.cp_buf[i] | 0x0700;
+                    if(input.e == input.r + INPUT_BUF) {
+                        input.w = input.e;
+                        wakeup(&input.r);
+                    }
+                }
+            }
+        }
+        
+        
+        outb(CRTPORT, 14);
+        outb(CRTPORT+1, pos>>8);
+        outb(CRTPORT, 15);
+        outb(CRTPORT+1, pos);
+        crt[pos] = ' ' | 0x0700;
+        
+        curr_pos = pos;
+    }
+    else {
+        if (c >= 0) {
+            crt[pos] = (crt[pos] & 0xff) | 0x0700;
+        
+            if (c == 'w' || c == 'W') {
+                if (pos >= 80)
+                    pos -= 80;
+            }
+            if (c == 's' || c == 'S') {
+                if (pos < 24 * 80)
+                    pos += 80;
+            }
+            if (c == 'a' || c == 'A') {
+                if (pos > 0)
+                    pos--;
+            }
+            if (c == 'd' || c == 'D') {
+                if (pos < 25 * 80 - 1)
+                    pos++;
+            }
+            if (c == 'q' || c == 'Q') {
+                if (cp_mode == 0) {
+                    cp_mode = 1;
+                    cp_struct.start = pos;
+                    cp_struct.end = pos;
+                }
+            }
+            if (c == 'e' || c == 'E') {
+                cp_mode = 0;
+                
+                int i;
+                if (cp_struct.start > cp_struct.end) {
+                    for (i = cp_struct.end; i < cp_struct.start && i < cp_struct.end + CP_BUF; i++) 
+                        cp_struct.cp_buf[i - cp_struct.end] = crt[i] & 0xff;
+                    cp_struct.len = i - cp_struct.end;
+                }
+                else {
+                    for (i = cp_struct.start; i <= cp_struct.end && i < cp_struct.start + CP_BUF; i++) 
+                        cp_struct.cp_buf[i - cp_struct.start] = crt[i] & 0xff;
+                    cp_struct.len = i - cp_struct.start;
+                }
+                cp_data = 1;
+                
+                refresh(0);
+            }
+            
+            if (cp_mode == 1) {
+                cp_struct.end = pos;
+                refresh(0);
+                refresh(1);
+            }
+            
+            crt[pos] = (crt[pos] & 0xff) | 0x7000;
+            
+        }
+        else if (c == -1234) {
+            crt[pos] = (crt[pos] & 0xff) | 0x7000;
+        }
+        
+        outb(CRTPORT, 14);
+        outb(CRTPORT+1, pos>>8);
+        outb(CRTPORT, 15);
+        outb(CRTPORT+1, pos);
+    }
 }
 
 void
@@ -176,56 +311,61 @@ consputc(int c)
 	cgaputc(c);
 }
 
-#define INPUT_BUF 128
-struct {
-	char buf[INPUT_BUF];
-	uint r;  // Read index
-	uint w;  // Write index
-	uint e;  // Edit index
-} input;
-
-#define C(x)  ((x)-'@')  // Control-x
-
 void
 consoleintr(int (*getc)(void))
 {
 	int c, doprocdump = 0;
 
 	acquire(&cons.lock);
-	while((c = getc()) >= 0){
-		switch(c){
-		case C('P'):  // Process listing.
-			// procdump() locks cons.lock indirectly; invoke later
-			doprocdump = 1;
-			break;
-		case C('U'):  // Kill line.
-			while(input.e != input.w &&
-			      input.buf[(input.e-1) % INPUT_BUF] != '\n'){
-				input.e--;
-				consputc(BACKSPACE);
-			}
-			break;
-		case C('H'): case '\x7f':  // Backspace
-			if(input.e != input.w){
-				input.e--;
-				consputc(BACKSPACE);
-			}
-			break;
-		default:
-			if(c != 0 && input.e-input.r < INPUT_BUF){
-				c = (c == '\r') ? '\n' : c;
-				input.buf[input.e++ % INPUT_BUF] = c;
-				consputc(c);
-				if(c == '\n' || c == C('D') || input.e == input.r+INPUT_BUF){
-					input.w = input.e;
-					wakeup(&input.r);
-				}
-			}
-			break;
-		}
+	while((c = getc())){
+		if (c >= 0) {
+            if (mode == 0) {
+                switch(c){
+                case C('P'):  // Process listing.
+                    // procdump() locks cons.lock indirectly; invoke later
+                    doprocdump = 1;
+                    break;
+                case C('U'):  // Kill line.
+                    while(input.e != input.w &&
+                        input.buf[(input.e-1) % INPUT_BUF] != '\n'){
+                        input.e--;
+                        consputc(BACKSPACE);
+                    }
+                    break;
+                case C('H'): case '\x7f':  // Backspace
+                    if(input.e != input.w){
+                        input.e--;
+                        consputc(BACKSPACE);
+                    }
+                    break;
+                default:
+                    if(c != 0 && input.e-input.r < INPUT_BUF){
+                        c = (c == '\r') ? '\n' : c;
+                        input.buf[input.e++ % INPUT_BUF] = c;
+                        consputc(c);
+                        if(c == '\n' || c == C('D') || input.e == input.r+INPUT_BUF){
+                            input.w = input.e;
+                            wakeup(&input.r);
+                        }
+                    }
+                    break;
+                }
+            }
+            else {
+                consputc(c);
+            }
+        } 
+        else {
+            if (c == -1111 || c == -1234 || c == -2222) {
+                cgaputc(c);
+            }
+            else {
+                break;
+            }
+        }
 	}
 	release(&cons.lock);
-	if(doprocdump) {
+	if(doprocdump && mode == 0) {
 		procdump();  // now call procdump() wo. cons.lock held
 	}
 }
@@ -294,4 +434,3 @@ consoleinit(void)
 
 	ioapicenable(IRQ_KBD, 0);
 }
-

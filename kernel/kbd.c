@@ -3,6 +3,8 @@
 #include "defs.h"
 #include "kbd.h"
 
+int mode = 0;
+
 int
 kbdgetc(void)
 {
@@ -40,6 +42,26 @@ kbdgetc(void)
 		else if('A' <= c && c <= 'Z')
 			c += 'a' - 'A';
 	}
+	
+	
+	int flag = shift & (SHIFT | ALT), c_flag = (c == 'c') || (c == 'C'), p_flag = (c == 'p') || (c == 'P');
+	
+	if (flag && c_flag) {
+        mode = 1 - mode;
+        if (mode == 0) {
+            return -1111;
+        }
+        return -1234;
+    }
+    else if (flag && p_flag) {
+        return -2222;
+    }
+	/*if (shift & (SHIFT & ALT)) {
+        if (c == 'c' || c == 'C')
+            mode = 1 - mode;
+    }*/
+    
+	
 	return c;
 }
 
