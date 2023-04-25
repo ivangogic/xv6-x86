@@ -23,6 +23,8 @@ int getpid(void);
 char* sbrk(int);
 int sleep(int);
 int uptime(void);
+int lsdel(char* path, char* result);
+int rec(char* path);
 
 // ulib.c
 int stat(const char*, struct stat*);

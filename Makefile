@@ -209,8 +209,10 @@ UPROGS=\
 	$U/_usertests\
 	$U/_wc\
 	$U/_zombie\
-	$U/_pipetest\
-
+	$U/_writer\
+	$U/_lsdel\
+	$U/_rec\
+	
 fs.img: $T/mkfs README $(UPROGS)
 	$T/mkfs fs.img README $(UPROGS)
 

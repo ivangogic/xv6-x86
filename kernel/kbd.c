@@ -44,7 +44,7 @@ kbdgetc(void)
 	}
 	
 	
-	int flag = shift & (SHIFT | ALT), c_flag = (c == 'c') || (c == 'C'), p_flag = (c == 'p') || (c == 'P');
+	int flag = (shift & SHIFT) && (shift & ALT) , c_flag = (c == 'c') || (c == 'C'), p_flag = (c == 'p') || (c == 'P');
 	
 	if (flag && c_flag) {
         mode = 1 - mode;

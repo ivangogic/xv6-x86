@@ -15,6 +15,11 @@
 #include "sleeplock.h"
 #include "file.h"
 #include "fcntl.h"
+#include "buf.h"
+
+extern int bcheck(int dev, uint b);
+extern int bcheck_ndirect(int dev, uint b);
+extern int iuntrunc(struct inode *ip);
 
 // Fetch the nth word-sized system call argument as a file descriptor
 // and return both the descriptor and the corresponding struct file.
@@ -174,7 +179,7 @@ isdirempty(struct inode *dp)
 	for(off=2*sizeof(de); off<dp->size; off+=sizeof(de)){
 		if(readi(dp, (char*)&de, off, sizeof(de)) != sizeof(de))
 			panic("isdirempty: readi");
-		if(de.inum != 0)
+		if(de.inum != 0 && de.del == 0)
 			return 0;
 	}
 	return 1;
@@ -207,6 +212,11 @@ sys_unlink(void)
 		goto bad;
 	ilock(ip);
 
+	if (ip->type == 0) {
+		iunlockput(ip);
+		goto bad;
+	}
+
 	if(ip->nlink < 1)
 		panic("unlink: nlink < 1");
 	if(ip->type == T_DIR && !isdirempty(ip)){
@@ -215,6 +225,9 @@ sys_unlink(void)
 	}
 
 	memset(&de, 0, sizeof(de));
+	de.del = 1;
+	de.inum = ip->inum;
+	memmove(de.name, name, DIRSIZ);
 	if(writei(dp, (char*)&de, off, sizeof(de)) != sizeof(de))
 		panic("unlink: writei");
 	if(ip->type == T_DIR){
@@ -250,7 +263,7 @@ create(char *path, short type, short major, short minor)
 	if((ip = dirlookup(dp, name, 0)) != 0){
 		iunlockput(dp);
 		ilock(ip);
-		if((type == T_FILE && ip->type == T_FILE) || ip->type == T_DEV)
+		if(type == T_FILE && ip->type == T_FILE)
 			return ip;
 		iunlockput(ip);
 		return 0;
@@ -439,5 +452,120 @@ sys_pipe(void)
 	}
 	fd[0] = fd0;
 	fd[1] = fd1;
+	return 0;
+}
+
+int 
+sys_lsdel(void)
+{
+	char *path, *result;
+	int num_del = 0;
+	struct inode *ip;
+	int off;
+	struct dirent de;
+	
+	if (argstr(0, &path) < 0 || argstr(1, &result))
+		return -1;
+
+	begin_op();
+
+	if ((ip = namei(path)) == 0){
+		end_op();
+		return -1;
+	}
+	ilock(ip);
+	if (ip->type != T_DIR) {
+		iunlockput(ip);
+		end_op();
+		return -2;
+	}
+	for(off=2*sizeof(de); off<ip->size; off+=sizeof(de)){
+		if(readi(ip, (char*)&de, off, sizeof(de)) != sizeof(de))
+			panic("isdirempty: readi");
+		if(de.inum != 0 && de.del == 1) {
+			strncpy(result + num_del * (DIRSIZ + 1), de.name, DIRSIZ);
+			num_del++;
+			*(result + num_del * (DIRSIZ + 1) - 1) = '\0';
+			if (num_del == 64)
+				break;
+		}
+	}
+
+	iunlockput(ip);
+	end_op();
+	return num_del;
+}
+
+int 
+sys_rec(void)
+{
+	char *path;
+	char name[DIRSIZ + 1];
+	struct inode *ip, *dp;
+	uint off;
+
+	if (argstr(0, &path) < 0)
+		return -10;
+
+	begin_op();
+
+	if ((dp = nameiparent(path, name)) == 0) {
+		end_op();
+		return -1;
+	}
+	ilock(dp);
+	if ((ip = dirlookup(dp, name, &off)) == 0){
+		iunlockput(dp);
+		end_op();
+		return -2;
+	}
+	ilock(ip);
+	if (ip->type != 0) {
+		iunlockput(ip);
+		iunlockput(dp);
+		end_op();
+		return -3;
+	}
+	
+	// check if some data is corrupt
+	int i;
+	char ind = 1;
+	for(i = 0; i < NDIRECT; i++){
+		if(ip->addrs[i]){
+			if (!bcheck(ip->dev, ip->addrs[i])) {
+				ind = 0;
+				break;
+			}
+		}
+	}
+	if (ip->addrs[NDIRECT]) {
+		if (!bcheck_ndirect(ip->dev, ip->addrs[NDIRECT]))
+			ind = 0;
+	}
+
+	if (ind == 0) {
+		iunlockput(ip);
+		iunlockput(dp);
+		end_op();
+		return -4;
+	}
+
+	// recover inode
+	struct dirent de;
+	if(readi(dp, (char*)&de, off, sizeof(de)) != sizeof(de))
+		panic("rec: dirent read");
+	de.del = 0;
+	if(writei(dp, (char*)&de, off, sizeof(de)) != sizeof(de))
+		panic("rec: dirent write");
+	ip->type = 2;
+	ip->valid = 1;
+	ip->nlink++;
+	ip->ref = 1;
+	iupdate(ip);
+	iuntrunc(ip);
+
+	iunlockput(ip);
+	iunlockput(dp);
+	end_op();
 	return 0;
 }
