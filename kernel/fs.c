@@ -412,7 +412,7 @@ itrunc(struct inode *ip)
 	for(i = 0; i < NDIRECT; i++){
 		if(ip->addrs[i]){
 			bfree(ip->dev, ip->addrs[i]);
-			ip->addrs[i] = 0;
+			//ip->addrs[i] = 0;
 		}
 	}
 
@@ -425,10 +425,10 @@ itrunc(struct inode *ip)
 		}
 		brelse(bp);
 		bfree(ip->dev, ip->addrs[NDIRECT]);
-		ip->addrs[NDIRECT] = 0;
+		//ip->addrs[NDIRECT] = 0;
 	}
 
-	ip->size = 0;
+	//ip->size = 0;
 	iupdate(ip);
 }
 
@@ -528,7 +528,7 @@ dirlookup(struct inode *dp, char *name, uint *poff)
 	for(off = 0; off < dp->size; off += sizeof(de)){
 		if(readi(dp, (char*)&de, off, sizeof(de)) != sizeof(de))
 			panic("dirlookup read");
-		if(de.inum == 0)
+		if(de.inum == 0 || de.del == 1)
 			continue;
 		if(namecmp(name, de.name) == 0){
 			// entry matches path element
@@ -560,12 +560,13 @@ dirlink(struct inode *dp, char *name, uint inum)
 	for(off = 0; off < dp->size; off += sizeof(de)){
 		if(readi(dp, (char*)&de, off, sizeof(de)) != sizeof(de))
 			panic("dirlink read");
-		if(de.inum == 0)
+		if(de.inum == 0 || de.del == 1)
 			break;
 	}
 
 	strncpy(de.name, name, DIRSIZ);
 	de.inum = inum;
+	de.del = 0;
 	if(writei(dp, (char*)&de, off, sizeof(de)) != sizeof(de))
 		panic("dirlink");
 

@@ -769,7 +769,8 @@ concreate(void)
 	char fa[40];
 	struct {
 		ushort inum;
-		char name[14];
+		char del;
+		char name[13];
 	} de;
 
 	printf("concreate test\n");
@@ -801,7 +802,7 @@ concreate(void)
 	fd = open(".", 0);
 	n = 0;
 	while(read(fd, &de, sizeof(de)) > 0){
-		if(de.inum == 0)
+		if(de.inum == 0 || de.del == 1)
 			continue;
 		if(de.name[0] == 'C' && de.name[2] == '\0'){
 			i = de.name[1] - '0';
@@ -819,6 +820,7 @@ concreate(void)
 	}
 	close(fd);
 
+	printf("n = %d\n", n);
 	if(n != 40){
 		printf("concreate not enough files in directory listing\n");
 		exit();

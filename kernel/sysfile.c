@@ -174,7 +174,7 @@ isdirempty(struct inode *dp)
 	for(off=2*sizeof(de); off<dp->size; off+=sizeof(de)){
 		if(readi(dp, (char*)&de, off, sizeof(de)) != sizeof(de))
 			panic("isdirempty: readi");
-		if(de.inum != 0)
+		if(de.inum != 0 && de.del == 0)
 			return 0;
 	}
 	return 1;
@@ -215,6 +215,9 @@ sys_unlink(void)
 	}
 
 	memset(&de, 0, sizeof(de));
+	de.del = 1;
+	de.inum = ip->inum;
+	memmove(de.name, name, DIRSIZ);
 	if(writei(dp, (char*)&de, off, sizeof(de)) != sizeof(de))
 		panic("unlink: writei");
 	if(ip->type == T_DIR){
