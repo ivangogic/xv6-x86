@@ -211,6 +211,7 @@ UPROGS=\
 	$U/_zombie\
 	$U/_pipetest\
 	$U/_writer\
+	$U/_lsdel\
 
 fs.img: $T/mkfs README $(UPROGS)
 	$T/mkfs fs.img README $(UPROGS)

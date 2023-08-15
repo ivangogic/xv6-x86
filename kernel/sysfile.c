@@ -444,3 +444,50 @@ sys_pipe(void)
 	fd[1] = fd1;
 	return 0;
 }
+
+int 
+sys_lsdel(void)
+{
+	char *path, *result;
+	int num_del = 0;
+	struct inode *ip;
+	int off;
+	struct dirent de;
+
+	if (argstr(0, &path) < 0 || argstr(1, &result))
+		return -1;
+
+	begin_op();
+
+	if ((ip = namei(path)) == 0){
+		end_op();
+		return -1;
+	}
+	ilock(ip);
+	if (ip->type != T_DIR) {
+		iunlock(ip);
+		end_op();
+		return -2;
+	}
+	for(off=2*sizeof(de); off<ip->size; off+=sizeof(de)){
+		if(readi(ip, (char*)&de, off, sizeof(de)) != sizeof(de))
+			panic("isdirempty: readi");
+		if(de.inum != 0 && de.del == 1) {
+			strncpy(result + num_del * (DIRSIZ + 1), de.name, DIRSIZ);
+			num_del++;
+			*(result + num_del * (DIRSIZ + 1) - 1) = '\0';
+			if (num_del == 64)
+				break;
+		}
+	}
+
+	iunlock(ip);
+	end_op();
+	return num_del;
+}
+
+int
+sys_rec(void)
+{
+	return 0;
+}
