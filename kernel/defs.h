@@ -52,6 +52,11 @@ struct inode*   nameiparent(char*, char*);
 int             readi(struct inode*, char*, uint, uint);
 void            stati(struct inode*, struct stat*);
 int             writei(struct inode*, char*, uint, uint);
+void            bset(int dev, uint b);
+int             bcheck(int dev, uint b);
+int             bcheck_ndirect(int dev, uint b);
+void            iuntrunc(struct inode *);
+struct inode*   dirlookup1(struct inode*, char*, uint*);
 
 // ide.c
 void            ideinit(void);

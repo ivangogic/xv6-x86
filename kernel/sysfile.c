@@ -465,7 +465,7 @@ sys_lsdel(void)
 	}
 	ilock(ip);
 	if (ip->type != T_DIR) {
-		iunlock(ip);
+		iunlockput(ip);
 		end_op();
 		return -2;
 	}
@@ -481,13 +481,81 @@ sys_lsdel(void)
 		}
 	}
 
-	iunlock(ip);
+	iunlockput(ip);
 	end_op();
 	return num_del;
 }
 
-int
+int 
 sys_rec(void)
 {
+	char *path;
+	char name[DIRSIZ + 1];
+	struct inode *ip, *dp;
+	uint off;
+
+	if (argstr(0, &path) < 0)
+		return -11;
+
+	begin_op();
+
+	if ((dp = nameiparent(path, name)) == 0) {
+		end_op();
+		return -1;
+	}
+	ilock(dp);
+	if ((ip = dirlookup1(dp, name, &off)) == 0){
+		iunlockput(dp);
+		end_op();
+		return -2;
+	}
+	ilock(ip);
+	if (ip->type != 0) {
+		iunlockput(ip);
+		iunlockput(dp);
+		end_op();
+		return -3;
+	}
+
+	// check if some data is corrupt
+	int i;
+	char ind = 1;
+	for(i = 0; i < NDIRECT; i++){
+		if(ip->addrs[i]){
+			if (!bcheck(ip->dev, ip->addrs[i])) {
+				ind = 0;
+				break;
+			}
+		}
+	}
+	if (ip->addrs[NDIRECT]) {
+		if (!bcheck_ndirect(ip->dev, ip->addrs[NDIRECT]))
+			ind = 0;
+	}
+
+	if (ind == 0) {
+		iunlockput(ip);
+		iunlockput(dp);
+		end_op();
+		return -4;
+	}
+
+	// recover inode
+	struct dirent de;
+	if(readi(dp, (char*)&de, off, sizeof(de)) != sizeof(de))
+		panic("rec: dirent read");
+	de.del = 0;
+	if(writei(dp, (char*)&de, off, sizeof(de)) != sizeof(de))
+		panic("rec: dirent write");
+	ip->type = 2;
+	ip->valid = 1;
+	ip->nlink++;
+	ip->ref = 1;
+	iupdate(ip);
+	iuntrunc(ip);
+
+	iunlockput(ip);
+	iunlockput(dp);
+	end_op();
 	return 0;
 }
