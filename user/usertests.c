@@ -820,7 +820,6 @@ concreate(void)
 	}
 	close(fd);
 
-	printf("n = %d\n", n);
 	if(n != 40){
 		printf("concreate not enough files in directory listing\n");
 		exit();
