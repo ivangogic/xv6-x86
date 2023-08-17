@@ -216,6 +216,10 @@ UPROGS=\
 	$U/_primestart\
 	$U/_primecom\
 	$U/_primecalc\
+	$U/_shmemtest\
+	$U/_proc1\
+	$U/_proc2\
+	$U/_proc3\
 
 fs.img: $T/mkfs README $(UPROGS)
 	$T/mkfs fs.img README $(UPROGS)

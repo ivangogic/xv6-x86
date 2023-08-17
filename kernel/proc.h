@@ -57,7 +57,7 @@ struct proc {
 	struct inode *cwd;           // Current directory
 	char name[16];               // Process name (debugging)
 	struct shared sh_mem[NUM_SHARED];
-	uint sh_access;
+	int sh_access;
 	pde_t *parent_pgdir;
 };
 

@@ -98,8 +98,7 @@ exec(char *path, char **argv)
 	uint a;
 	pte_t *pte;
 
-	int num_shared = curproc->sh_access >> 4;
-	for (int i = 0; i < num_shared; i++) {
+	for (int i = 0; i < NUM_SHARED && curproc->sh_mem[i].size > 0; i++) {
 		if ((pte = walkpgdir(curproc->parent_pgdir, curproc->sh_mem[i].ptr, 0)) == 0)
 			panic("exec: sh_mem - PTE should exist");
 
@@ -113,8 +112,7 @@ exec(char *path, char **argv)
 		curproc->sh_mem[i].ptr = (void *) (a | off);
 	}
 
-
-	curproc->sh_access += 1;
+	curproc->sh_access = 1;
 
 	// Commit to the user image.
 	oldpgdir = curproc->pgdir;

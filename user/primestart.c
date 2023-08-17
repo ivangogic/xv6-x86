@@ -14,17 +14,21 @@ main(int argc, char *argv[])
         share_mem("cmd", &cmd, sizeof(cmd)) < 0
     ) {
         fprintf(2, "primestart: share_mem\n");
-        exit();
+        goto end;
     }
     
     if (fork() == 0) {
         char *argv1[] = {"/bin/primecalc", 0};
         exec("/bin/primecalc", argv1);
+
+        fprintf(2, "primestart: exec\n");
     }
     else {
         if (fork() == 0) {
             char *argv2[] = {"/bin/primecom", 0};
             exec("/bin/primecom", argv2);
+
+            fprintf(2, "primestart: exec\n");
         }
         else {
             wait();
@@ -32,5 +36,7 @@ main(int argc, char *argv[])
         }
     }
 
+end:
+    free(arr);
     exit();
 }

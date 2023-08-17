@@ -566,29 +566,25 @@ sys_share_mem(void) {
 	void *addr;
 	int size;
 	struct proc *p = myproc();
-	int upper4 = p->sh_access >> 4, lower4 = p->sh_access & 0xF;
-	
-	if (upper4 >= NUM_SHARED) {
-		return -3;
-	}
+	int i;
 
 	if (argstr(0, &name) < 0 || argint(2, &size) < 0 || argptr(1, (char **) &addr, size) < 0) {
 		return -1;
 	}
 
-	for (int i = 0; i < upper4; i++) {
+	for (i = 0; i < NUM_SHARED && p->sh_mem[i].size > 0; i++) {
 		if (strncmp(name, p->sh_mem[i].name, 20) == 0) {
 			return -2;
 		}
 	}
 
-	strncpy(p->sh_mem[upper4].name, name, 20);
-	p->sh_mem[upper4].name[20] = '\0';
-	p->sh_mem[upper4].size = size;
-	p->sh_mem[upper4].ptr = addr;
+	if (i == NUM_SHARED)
+		return -3;
 
-	upper4++;
-	p->sh_access = (upper4 << 4) | lower4;
+	strncpy(p->sh_mem[i].name, name, 20);
+	p->sh_mem[i].name[20] = '\0';
+	p->sh_mem[i].size = size;
+	p->sh_mem[i].ptr = addr;
 
 	return 0;
 }
@@ -598,21 +594,17 @@ sys_get_shared(void) {
 	char *name;
 	void **addr;
 	struct proc *p = myproc();
-	int upper4 = p->sh_access >> 4, lower4 = p->sh_access & 0xF;
 
 	if (argstr(0, &name) < 0 || argptr(1, (char **) &addr, 0) < 0) {
 		return -1;
 	}
 
-	if (upper4 == 0) {
-		return -2;
+	if (p->sh_access == 0) {
+		cprintf("sys_get_shared: accessing shared memory without privilege\n");
+		return -4;
 	}
 
-	if (lower4 == 0) {
-		panic("sys_get_shared: accessing shared memory without privilege\n");
-	}
-
-	for (int i = 0; i < upper4; i++) {
+	for (int i = 0; i < NUM_SHARED && p->sh_mem[i].size > 0; i++) {
 		if (strncmp(name, p->sh_mem[i].name, 20) == 0) {
 			*addr = p->sh_mem[i].ptr;
 			return 0;
