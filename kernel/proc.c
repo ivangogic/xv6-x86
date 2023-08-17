@@ -113,6 +113,8 @@ found:
 	memset(p->context, 0, sizeof *p->context);
 	p->context->eip = (uint)forkret;
 
+	p->sh_access = 0;
+
 	return p;
 }
 
@@ -199,6 +201,12 @@ fork(void)
 	np->sz = curproc->sz;
 	np->parent = curproc;
 	*np->tf = *curproc->tf;
+
+	for (int i = 0; i < NUM_SHARED; i++)
+		np->sh_mem[i] = curproc->sh_mem[i];
+
+	np->sh_access = (curproc->sh_access >> 4) << 4;
+	np->parent_pgdir = curproc->pgdir;
 
 	// Clear %eax so that fork returns 0 in the child.
 	np->tf->eax = 0;

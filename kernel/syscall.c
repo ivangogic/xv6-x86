@@ -105,6 +105,8 @@ extern int sys_write(void);
 extern int sys_uptime(void);
 extern int sys_lsdel(void);
 extern int sys_rec(void);
+extern int sys_share_mem(void);
+extern int sys_get_shared(void);
 
 static int (*syscalls[])(void) = {
 [SYS_fork]    sys_fork,
@@ -128,8 +130,10 @@ static int (*syscalls[])(void) = {
 [SYS_link]    sys_link,
 [SYS_mkdir]   sys_mkdir,
 [SYS_close]   sys_close,
-[SYS_lsdel]   sys_lsdel,
-[SYS_rec]     sys_rec
+[SYS_lsdel]   		sys_lsdel,
+[SYS_rec]     		sys_rec,
+[SYS_share_mem] 	sys_share_mem,
+[SYS_get_shared] 	sys_get_shared
 };
 
 void

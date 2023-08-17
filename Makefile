@@ -213,6 +213,9 @@ UPROGS=\
 	$U/_writer\
 	$U/_lsdel\
 	$U/_rec\
+	$U/_primestart\
+	$U/_primecom\
+	$U/_primecalc\
 
 fs.img: $T/mkfs README $(UPROGS)
 	$T/mkfs fs.img README $(UPROGS)

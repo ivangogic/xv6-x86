@@ -6,3 +6,4 @@ This project enhances the xv6 operating system by introducing new functionalitie
 
 - **Shell Copy-Paste:** Enhance the xv6 shell with copy-paste functionality.
 - **File Recovery:** Implement file recovery for deleted files (directories are not supported).
+- **Shared Memory:** Enable shared memory functionality between parent and child processes.

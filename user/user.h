@@ -25,6 +25,8 @@ int sleep(int);
 int uptime(void);
 int lsdel(char* path, char* result);
 int rec(char* path);
+int share_mem(char *name, void *addr, int size);
+int get_shared(char *name, void **addr);
 
 // ulib.c
 int stat(const char*, struct stat*);

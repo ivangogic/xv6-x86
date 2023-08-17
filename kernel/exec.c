@@ -93,6 +93,29 @@ exec(char *path, char **argv)
 			last = s+1;
 	safestrcpy(curproc->name, last, sizeof(curproc->name));
 
+	// Shared memory initialization
+	uint first = SHARED_BEGIN;
+	uint a;
+	pte_t *pte;
+
+	int num_shared = curproc->sh_access >> 4;
+	for (int i = 0; i < num_shared; i++) {
+		if ((pte = walkpgdir(curproc->parent_pgdir, curproc->sh_mem[i].ptr, 0)) == 0)
+			panic("exec: sh_mem - PTE should exist");
+
+		a = PGROUNDDOWN(first);
+		off = PTE_FLAGS(curproc->sh_mem[i].ptr);
+
+		if (mappages(pgdir, (void *) a, curproc->sh_mem[i].size, PTE_ADDR(*pte), PTE_W | PTE_U) != 0)
+			panic("exec: sh_mem - mappages");
+
+		first = PGROUNDDOWN(a + curproc->sh_mem[i].size - 1) + PGSIZE;
+		curproc->sh_mem[i].ptr = (void *) (a | off);
+	}
+
+
+	curproc->sh_access += 1;
+
 	// Commit to the user image.
 	oldpgdir = curproc->pgdir;
 	curproc->pgdir = pgdir;
